@@ -12,7 +12,7 @@ describe DoubleEntry::TimeRange::Year do
     it { should be_a DoubleEntry::TimeRange::Year }
     its(:year)   { should eq 2013 }
     its(:start)  { should eq Time.parse('2013-01-01') }
-    its(:finish) { should eq Time.parse('2013-12-31') }
+    its(:finish) { should eq Time.parse('2013-12-31 23:59:59') }
   end
 
   describe '.current' do

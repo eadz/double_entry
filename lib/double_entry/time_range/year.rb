@@ -7,11 +7,11 @@ module DoubleEntry
       @year = options.fetch(:year)
 
       @start  = Time.local(year,  1,  1)
-      @finish = Time.local(year, 12, 31)
+      @finish = Time.local(year, 12, 31, 23, 59, 59)
     end
 
     def self.current
-      TimeRange::Year.new(:year => Time.now.year)
+      TimeRange::Year.from_time(Time.now)
     end
 
     def self.from_time(time)
