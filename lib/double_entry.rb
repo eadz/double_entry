@@ -27,6 +27,7 @@ require 'double_entry/month_range'
 require 'double_entry/year_range'
 
 require 'double_entry/time_range/year'
+require 'double_entry/time_range/quarter'
 
 require 'double_entry/line'
 require 'double_entry/line_aggregate'
