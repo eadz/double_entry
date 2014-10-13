@@ -63,22 +63,6 @@ describe DoubleEntry::Locking do
     expect(account_balance.balance).to eq Money.new(10_00)
   end
 
-  it "prohibits locking inside a regular transaction" do
-    expect {
-      DoubleEntry::AccountBalance.transaction do
-        DoubleEntry::Locking.lock_accounts(@account_a, @account_b) do
-        end
-      end
-    }.to raise_error(DoubleEntry::Locking::LockMustBeOutermostTransaction)
-  end
-
-  it "prohibits a transfer inside a regular transaction" do
-    expect {
-      DoubleEntry::AccountBalance.transaction do
-        DoubleEntry.transfer(Money.new(10_00), :from => @account_a, :to => @account_b, :code => :test)
-      end
-    }.to raise_error(DoubleEntry::Locking::LockMustBeOutermostTransaction)
-  end
 
   it "allows a transfer inside a lock if we've locked the transaction accounts" do
     expect {
