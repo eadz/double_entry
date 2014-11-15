@@ -107,14 +107,8 @@ module DoubleEntry
         in_a_locked_transaction? && locks.has_key?(account)
       end
 
-      # Raise an exception unless we're outside any transactions.
       def ensure_outermost_transaction!
-        minimum_transaction_level = Locking.configuration.running_inside_transactional_fixtures ? 1 : 0
-        unless AccountBalance.connection.open_transactions <= minimum_transaction_level
-          raise LockMustBeOutermostTransaction
-        end
       end
-
 
       # Start a transaction, grab locks on the given accounts, then call the block
       # from within the transaction.
