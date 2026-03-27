@@ -5,6 +5,11 @@ RSpec.describe ActiveRecord::LockingExtensions do
   MYSQL_DEADLOCK = ActiveRecord::StatementInvalid.new('Mysql::Error: Deadlock found when trying to get lock')
   SQLITE3_LOCK   = ActiveRecord::StatementInvalid.new('SQLite3::BusyException: database is locked: UPDATE...')
 
+  # Mocking StatementInvalid exceptions can leave the database connection in a
+  # broken state (particularly with PostgreSQL). Reconnect after each test to
+  # ensure DatabaseCleaner and subsequent tests get a healthy connection.
+  after { ActiveRecord::Base.connection_handler.clear_active_connections! }
+
   context '#restartable_transaction' do
     it "keeps running the lock until a ActiveRecord::RestartTransaction isn't raised" do
       expect(User).to receive(:create!).ordered.and_raise(ActiveRecord::RestartTransaction)
