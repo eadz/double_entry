@@ -2,12 +2,12 @@ module PerformanceHelper
   require 'ruby-prof'
 
   def start_profiling(measure_mode = RubyProf::PROCESS_TIME)
-    RubyProf.measure_mode = measure_mode
-    RubyProf.start
+    @profile = RubyProf::Profile.new(measure_mode: measure_mode)
+    @profile.start
   end
 
   def stop_profiling(profile_name = nil)
-    result = RubyProf.stop
+    result = @profile.stop
     puts "#{profile_name} Time: #{format('%#.3g', total_time(result))}s"
     unless ENV.fetch('CI', false)
       if profile_name
