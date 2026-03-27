@@ -50,10 +50,11 @@ module DoubleEntry
       end
     end
 
-    # Return the account balance record for the given account name if there's a
+    # Return the account balance record for the given account if there's a
     # lock on it, or raise a LockNotHeld if there isn't.
     def self.balance_for_locked_account(account)
-      Lock.new([account]).balance_for(account)
+      Lock.new([account]).ensure_locked!
+      AccountBalance.find_by_account(account, lock: true)
     end
 
     class Lock
@@ -66,50 +67,25 @@ module DoubleEntry
       # needed.
       def perform_lock(&block)
         ensure_outermost_transaction!
-
-        unless lock_and_call(&block)
-          create_missing_account_balances
-          fail LockDisaster unless lock_and_call(&block)
-        end
+        ensure_account_balances_exist
+        lock_and_execute(&block)
       end
 
       # Return true if we're inside a lock_accounts block.
       def in_a_locked_transaction?
-        !locks.nil?
+        !Thread.current[:double_entry_locked_accounts].nil?
       end
 
       def ensure_locked!
+        locked = Thread.current[:double_entry_locked_accounts]
         @accounts.each do |account|
-          unless lock?(account)
+          unless locked&.include?(account)
             fail LockNotHeld, "No lock held for account: #{account.identifier}, scope #{account.scope}"
           end
         end
       end
 
-      def balance_for(account)
-        ensure_locked!
-
-        locks[account]
-      end
-
     private
-
-      def locks
-        Thread.current[:double_entry_locks]
-      end
-
-      def locks=(locks)
-        Thread.current[:double_entry_locks] = locks
-      end
-
-      def remove_locks
-        Thread.current[:double_entry_locks] = nil
-      end
-
-      # Return true if there's a lock on the given account.
-      def lock?(account)
-        in_a_locked_transaction? && locks.key?(account)
-      end
 
       # Raise an exception unless we're outside any transactions.
       def ensure_outermost_transaction!
@@ -119,54 +95,27 @@ module DoubleEntry
         end
       end
 
-      # Start a transaction, grab locks on the given accounts, then call the block
-      # from within the transaction.
-      #
-      # If any account can't be locked (because there isn't a corresponding account
-      # balance record), don't call the block, and return false.
-      def lock_and_call
-        locks_succeeded = nil
-        AccountBalance.restartable_transaction do
-          locks_succeeded = AccountBalance.with_restart_on_deadlock { grab_locks }
-          if locks_succeeded
-            begin
-              yield
-            ensure
-              remove_locks
-            end
-          end
-        end
-        locks_succeeded
-      end
-
-      # Grab a lock on the account balance record for each account.
-      #
-      # If all the account balance records exist, set locks to a hash mapping
-      # accounts to account balances, and return true.
-      #
-      # If one or more account balance records don't exist, set
-      # accounts_with_balances to the corresponding accounts, and return false.
-      def grab_locks
-        account_balances = @accounts.map { |account| AccountBalance.find_by_account(account, lock: true) }
-
-        if account_balances.any?(&:nil?)
-          @accounts_without_balances =  @accounts.zip(account_balances).
-                                        select { |_account, account_balance| account_balance.nil? }.
-                                        collect { |account, _account_balance| account }
-          false
-        else
-          self.locks = Hash[*@accounts.zip(account_balances).flatten]
-          true
-        end
-      end
-
-      # Create all the account_balances for the given accounts.
-      def create_missing_account_balances
-        @accounts_without_balances.each do |account|
-          # Get the initial balance from the lines table.
+      # Create any missing account_balance records before locking.
+      def ensure_account_balances_exist
+        @accounts.each do |account|
+          next if AccountBalance.find_by_account(account)
           balance = account.balance
-          # Try to create the balance record, but ignore it if someone else has done it in the meantime.
           AccountBalance.create_ignoring_duplicates!(account: account, balance: balance)
+        end
+      end
+
+      # Start a transaction, grab locks on all accounts, then call the block.
+      def lock_and_execute(&block)
+        AccountBalance.restartable_transaction do
+          AccountBalance.with_restart_on_deadlock do
+            @accounts.each { |account| AccountBalance.find_by_account(account, lock: true) }
+          end
+          begin
+            Thread.current[:double_entry_locked_accounts] = @accounts
+            yield
+          ensure
+            Thread.current[:double_entry_locked_accounts] = nil
+          end
         end
       end
     end
